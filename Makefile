@@ -1,6 +1,5 @@
 CC		:= g++
-# CFLAGS	:= -g -Wall -std=c++17
-CFLAGS	:= -g -Wall -std=c++11 # unfortunately
+CFLAGS	:= -Wall -Wextra -O3 -std=c++11 # -std=c++17 # unfortunately
 
 SRC		:= src
 BIN		:= bin
