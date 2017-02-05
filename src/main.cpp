@@ -9,6 +9,8 @@
 #include <iomanip>   // std::setprecision
 #include <iostream>  // std::cout, std::fixed
 
+#include <omp.h>
+
 #if defined(CLOCK_MONOTONIC)
 #define CLOCK CLOCK_MONOTONIC
 #elif defined(CLOCK_REALTIME)
@@ -105,7 +107,7 @@ int main(int argc, char** argv) {
     //
 
     if (argc == 1) {
-        usage(argc, argv); // first arguments is a executable filename
+        usage(argc, argv); // first arguments is an executable filename
         return 1;
     }
 
@@ -195,27 +197,29 @@ int main(int argc, char** argv) {
     // Calculation
     //
 
+    result = new double[graph->vertices];
+
     cout << "Calculation:" << endl;
 
-    for (int i = 1; i <= number_of_iterations; i++) {
-        cout << " - " << i << " of " << number_of_iterations;
+    for (int it = 1; it <= number_of_iterations; it++) {
+        cout << " - " << it << " of " << number_of_iterations;
 
         struct timespec start_time, finish_time;
 
-        result = new double[graph->vertices];
         for (vertex_size_t i = 0; i < graph->vertices; result[i++] = 0);
 
         clock_gettime(CLOCK, &start_time);
 
+#pragma omp parallel
         {
             // algorithm
         }
 
         clock_gettime(CLOCK, &finish_time);
 
-        double time = finish_time.tv_sec - (double) start_time.tv_sec;
-        time = time + time * 1.0e-9;
-        iteration_times[i - 1] = time;
+        double time = finish_time.tv_sec - (double) start_time.tv_sec +
+            (finish_time.tv_nsec - (double) start_time.tv_nsec) * 1.0e-9;
+        iteration_times[it - 1] = time;
 
         cout << ": " << setprecision(5) << fixed << time << " sec." << endl;
     }
@@ -241,7 +245,7 @@ int main(int argc, char** argv) {
 
     {
         double min_time, max_time, all_time, avg_time;
-        min_time = max_time = avg_time = iteration_times[0];
+        min_time = max_time = all_time = avg_time = iteration_times[0];
 
         for (int i = 1; i < number_of_iterations; i++) {
             all_time += iteration_times[i];
