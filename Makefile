@@ -1,5 +1,5 @@
 CC		:= g++
-CFLAGS	:= -Wall -Wextra -O3 -std=c++11 # -std=c++17 # unfortunately
+CFLAGS	:= -fopenmp -Wall -Wextra -O3 -std=c++11 # -std=c++17 # unfortunately
 
 SRC		:= src
 BIN		:= bin
@@ -7,8 +7,8 @@ BUILD	:= build
 INCLUDE	:= include
 LIB		:= lib
 
-# TARGET	:= $(BIN)/solution
-TARGET	:= solution
+TARGET	:= $(BIN)/solution
+# TARGET	:= solution
 
 INCS	:= -I $(INCLUDE)
 LIBS	:= -L $(LIB)
@@ -19,7 +19,7 @@ SOURCES	:= $(shell find $(SRC) -type f -name *.$(EXT))
 OBJECTS	:= $(patsubst $(SRC)/%,$(BUILD)/%,$(SOURCES:.$(EXT)=.o))
 
 $(TARGET): $(OBJECTS)
-	$(CC) $^ -o $(TARGET) $(INCS) $(LIBS)
+	$(CC) $^ -o $(TARGET) $(CFLAGS) $(INCS) $(LIBS)
 
 $(BUILD)/%.o: $(SRC)/%.$(EXT)
 	@mkdir -p $(BUILD)
@@ -27,6 +27,6 @@ $(BUILD)/%.o: $(SRC)/%.$(EXT)
 
 clean:
 	@rm -r $(BUILD)/*
-	@rm -r $(BIN)/*
+	@rm -r $(TARGET)
 
 .PHONY: clean
