@@ -5,11 +5,11 @@
 
 #include <algorithm> // std::log
 #include <cassert>   // std::assert
-#include <cstring>   // std::strcmp
+#include <cstring>   // std::memset, std::strcmp
 #include <iomanip>   // std::setprecision
 #include <iostream>  // std::cout, std::fixed
 
-#include <omp.h>
+#include "main.h"
 
 #if defined(CLOCK_MONOTONIC)
 #define CLOCK CLOCK_MONOTONIC
@@ -23,71 +23,11 @@
 
 using namespace std;
 
-
-typedef unsigned vertex_size_t;
-typedef unsigned long long edge_size_t;
-
-class Graph {
-public:
-    /**
-     * Scale of the graph (log2 of number of vertices).
-     */
-    vertex_size_t scale;
-
-    /**
-     * Number of vertices.
-     */
-    vertex_size_t vertices;
-
-    /**
-     * Number of edges.
-     */
-    edge_size_t   edges;
-
-    /**
-     * Edge ends.
-     */
-    vertex_size_t* ends;
-
-    /**
-     * Edge indices.
-     * Rule is: for each v (vertex in graph)
-     *  - ends[index[v]] is a first edge (edge end) from v,
-     *  - ends[index[v + 1] - 1] is a last edge (edge end) from v.
-     */
-    edge_size_t* indices;
-
-    /**
-     * Create a new graph with provided numbers of vertices and edges.
-     *
-     * @param vertices Nubmer of vertices
-     * @param edges    Number of edges
-     * @param ends     Edge ends
-     * @param indices  Edge indices
-     */
-    Graph(vertex_size_t vertices, edge_size_t edges, vertex_size_t* ends,
-          edge_size_t* indices) {
-        this->scale = log(vertices) / log(2);
-
-        this->vertices = vertices;
-        this->edges = edges;
-
-        this->ends = ends;
-        this->indices = indices;
-    }
-
-    /**
-     * Delete a graph and free memory, allocated to the edges.
-     */
-    ~Graph() {
-        delete[] this->ends;
-        delete[] this->indices;
-    }
-};
-
 /**
  * Prints usage to the standart i/o.
  */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 void usage(int argc, char** argv)
 {
     cout << "Usage:" << endl;
@@ -100,6 +40,7 @@ void usage(int argc, char** argv)
     cout << "    -nIters <iterations>                 -- number of solution iterations, positive number" << endl;
     cout << endl;
 }
+#pragma GCC diagnostic pop
 
 int main(int argc, char** argv) {
     //
@@ -107,20 +48,62 @@ int main(int argc, char** argv) {
     //
 
     if (argc == 1) {
-        usage(argc, argv); // first arguments is an executable filename
+        usage(argc, argv); // first argument is an executable filename
         return 1;
     }
 
-    string input_filename;
-    string output_filename;
-    int    number_of_iterations = DEFAULT_NUMBER_OF_ITERATIONS;
+    /**
+     * Input filename with given graph.
+     */
+    string               input_filename;
 
-    Graph* graph;
+    /**
+     * Output filename for result of calculation.
+     */
+    string               output_filename;
 
-    double* iteration_times = new double[number_of_iterations];
-    double* result;
+    /**
+     * Number of solution iterations.
+     */
+    int                  number_of_iterations = DEFAULT_NUMBER_OF_ITERATIONS;
 
-    assert(iteration_times != NULL);
+    /**
+     * Scale of the graph (log2 of number of vertices).
+     */
+    vertex_size_t        scale;
+
+    /**
+     * Number of vertices.
+     */
+    vertex_size_t        vertices;
+
+    /**
+     * Number of edges.
+     */
+    edge_size_t          edges;
+
+    /**
+     * Edge ends.
+     */
+    vertex_size_t*       ends;
+
+    /**
+     * Edge indices.
+     * Rule is: for each v (vertex in graph)
+     *  - ends[index[v]] is a first edge (edge end) from v,
+     *  - ends[index[v + 1] - 1] is a last edge (edge end) from v.
+     */
+    edge_size_t*         indices;
+
+    /**
+     * Array with times of each iteration of the solution.
+     */
+    double*              iteration_times = new double[number_of_iterations];
+
+    /**
+     * Result of calculation.
+     */
+    double*              result;
 
     //
     // Configuration
@@ -156,26 +139,30 @@ int main(int argc, char** argv) {
     //
 
     {
+        // #pragma GCC diagnostic push
+        // #pragma GCC diagnostic ignored "-Wunused-result"
+
         FILE *f = fopen(input_filename.c_str(), "rb");
         assert(f != NULL);
 
-        vertex_size_t vertices;
-        edge_size_t edges;
-        
-        fread(&vertices, sizeof(vertex_size_t), 1, f);
-        fread(&edges, sizeof(edge_size_t), 1, f);
-        
-        unsigned char align; fread(&align, sizeof(unsigned char), 1, f);
-        
-        edge_size_t* indices = new edge_size_t[vertices + 1];
-        vertex_size_t* ends = new vertex_size_t[edges];
+        assert(fread(&vertices, sizeof(vertex_size_t), 1, f) == 1);
+        assert(fread(&edges, sizeof(edge_size_t), 1, f) == 1);
 
-        fread(indices, sizeof(edge_size_t), vertices + 1, f);
-        fread(ends, sizeof(vertex_size_t), edges, f);
+        scale = log(vertices) / log(2);
+        
+        unsigned char align;
+        assert(fread(&align, sizeof(unsigned char), 1, f) == 1);
+        
+        indices = new edge_size_t[vertices + 1];
+        ends = new vertex_size_t[edges];
+
+        assert(fread(indices, sizeof(edge_size_t), vertices + 1, f) == 
+               vertices + 1);
+        assert(fread(ends, sizeof(vertex_size_t), edges, f) == edges);
 
         fclose(f);
 
-        graph = new Graph(vertices, edges, ends, indices);
+        // #pragma GCC diagnostic pop
     }
 
     //
@@ -187,9 +174,9 @@ int main(int argc, char** argv) {
     cout << "Number of iterations: " << number_of_iterations << endl;
     cout << endl;
 
-    cout << "Scale:    " << graph->scale << endl;
-    cout << "Vertices: " << graph->vertices << endl;
-    cout << "Edges:    " << graph->edges << endl;
+    cout << "Scale:    " << scale << endl;
+    cout << "Vertices: " << vertices << endl;
+    cout << "Edges:    " << edges << endl;
 
     cout << endl;
 
@@ -197,7 +184,7 @@ int main(int argc, char** argv) {
     // Calculation
     //
 
-    result = new double[graph->vertices];
+    result = new double[vertices];
 
     cout << "Calculation:" << endl;
 
@@ -206,15 +193,10 @@ int main(int argc, char** argv) {
 
         struct timespec start_time, finish_time;
 
-        for (vertex_size_t i = 0; i < graph->vertices; result[i++] = 0);
+        fill(result, result + vertices, (double) 0.0);
 
         clock_gettime(CLOCK, &start_time);
-
-#pragma omp parallel
-        {
-            // algorithm
-        }
-
+        run(vertices, edges, ends, indices, result);
         clock_gettime(CLOCK, &finish_time);
 
         double time = finish_time.tv_sec - (double) start_time.tv_sec +
@@ -227,14 +209,14 @@ int main(int argc, char** argv) {
     cout << endl;
 
     //
-    // Answer writing
+    // Result writing
     //
 
     {
         FILE *f = fopen(output_filename.c_str(), "wb");
         assert(f != NULL);
 
-        fwrite(result, sizeof(double), graph->vertices, f);
+        assert(fwrite(result, sizeof(double), vertices, f) == vertices);
 
         fclose(f);
     }
@@ -269,7 +251,8 @@ int main(int argc, char** argv) {
 
         cout << endl;
 
-        cout << "Time = " << avg_time << " sec." << endl;
+        // For the contest judge system
+        cout << "avg = " << avg_time << " sec." << endl;
     }
 
     //
@@ -278,7 +261,8 @@ int main(int argc, char** argv) {
 
     delete[] result;
     delete[] iteration_times;
-    delete graph;
+    delete[] ends;
+    delete[] indices;
 
     // 
     // Done

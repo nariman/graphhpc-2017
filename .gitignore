@@ -1,6 +1,7 @@
 # Project
 bin/
 build/
+trash/
 
 # Compiled Object files
 *.slo

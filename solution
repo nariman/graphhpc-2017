@@ -1,2 +1,6 @@
 #!/bin/bash
-./bin/solution $*
+
+export OMP_NUM_THREADS=4
+export KMP_AFFINITY=scatter,granularity=threads
+
+./bin/solution-openmp $*

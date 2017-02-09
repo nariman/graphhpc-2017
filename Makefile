@@ -1,32 +1,43 @@
-CC		:= g++
-CFLAGS	:= -fopenmp -Wall -Wextra -O3 -std=c++11 # -std=c++17 # unfortunately
+CC			:= g++-4.8
+CCCUDA		:= nvcc
+CFLAGS		:= -fopenmp -O3 -std=c++11 -Wall -Wextra
+CFLAGSCUDA	:= -x cu
 
-SRC		:= src
-BIN		:= bin
-BUILD	:= build
-INCLUDE	:= include
-LIB		:= lib
+SRC			:= src
+BIN			:= bin
+BUILD		:= build
 
-TARGET	:= $(BIN)/solution
-# TARGET	:= solution
+INCS		:= -I $(SRC)
 
-INCS	:= -I $(INCLUDE)
-LIBS	:= -L $(LIB)
+EXT			:= cpp
+EXTCUDA		:= cu
 
-EXT		:= cpp
+all: solution-openmp solution-cuda
+solution: solution-openmp
 
-SOURCES	:= $(shell find $(SRC) -type f -name *.$(EXT))
-OBJECTS	:= $(patsubst $(SRC)/%,$(BUILD)/%,$(SOURCES:.$(EXT)=.o))
+solution-openmp: $(BUILD)/main.o $(BUILD)/openmp.o
+	@mkdir -p $(BIN)
+	$(CC) $^ -o $(BIN)/solution-openmp $(CFLAGS) $(INCS)
 
-$(TARGET): $(OBJECTS)
-	$(CC) $^ -o $(TARGET) $(CFLAGS) $(INCS) $(LIBS)
+solution-cuda: $(BUILD)/main.o $(BUILD)/cuda.o
+	@mkdir -p $(BIN)
+	$(CC) $^ -o $(BIN)/solution-cuda -L/usr/local/cuda/lib64 -lcudart -lrt $(CFLAGS) $(INCS)
 
-$(BUILD)/%.o: $(SRC)/%.$(EXT)
+$(BUILD)/main.o: $(SRC)/main.cpp
 	@mkdir -p $(BUILD)
-	$(CC) -c -o $@ $< $(CFLAGS) $(INCS) 
+	$(CC) -c -o $@ $< $(CFLAGS) $(INCS)
+
+$(BUILD)/openmp.o: $(SRC)/openmp.cpp
+	@mkdir -p $(BUILD)
+	$(CC) -c -o $@ $< $(CFLAGS) $(INCS)
+
+$(BUILD)/cuda.o: $(SRC)/cuda.cu
+	@mkdir -p $(BUILD)
+	$(CCCUDA) -c -o $@ $< $(CFLAGSCUDA) $(INCS)
 
 clean:
 	@rm -r $(BUILD)/*
-	@rm -r $(TARGET)
+	@rm $(BIN)/solution-openmp
+	@rm $(BIN)/solution-cuda
 
 .PHONY: clean
