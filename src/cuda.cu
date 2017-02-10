@@ -93,8 +93,7 @@ __global__ void kernel(vertex_size_t* d_vertices,
 
                     d_p_prev[p_pos] = d_p_last[t];
                     d_p_val[p_pos] = v;
-                    d_p_last[t] = p_pos;
-                    p_pos++;
+                    d_p_last[t] = p_pos++;
                 }
             }
         }

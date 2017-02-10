@@ -19,6 +19,8 @@ cd ./../
 ./solution -in ./bin/$1-$2 ${@:3}
 
 cd ./bin
-./validation -in $1-$2 -res $1-$2.res
-rm $1-$2
+# ./gen_valid_info -in $1-$2 ${@:3}
+./validation -ans $1-$2.ans -res $1-$2.res
+# rm $1-$2
+# rm $1-$2.ans
 rm $1-$2.res

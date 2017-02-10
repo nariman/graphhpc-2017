@@ -1,7 +1,7 @@
 # Project
 bin/
 build/
-trash/
+vendor/
 
 # Compiled Object files
 *.slo
