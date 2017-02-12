@@ -3,4 +3,4 @@
 export OMP_NUM_THREADS=56
 export KMP_AFFINITY=scatter,granularity=threads
 
-./bin/solution-cuda $*
+./bin/solution-openmp $*

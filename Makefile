@@ -1,7 +1,7 @@
 CC			:= g++-4.8
 CCCUDA		:= nvcc
 CFLAGS		:= -fopenmp -O3 -std=c++11 -Wall -Wextra # -DDEBUG_SOLUTION
-CFLAGSCUDA	:= -x cu -arch=sm_62 # -DDEBUG_SOLUTION
+CFLAGSCUDA	:= -x cu --gpu-architecture=compute_20 --Wno-deprecated-gpu-targets # -DDEBUG_SOLUTION
 
 SRC			:= src
 BIN			:= bin
@@ -13,7 +13,7 @@ EXT			:= cpp
 EXTCUDA		:= cu
 
 all: solution-openmp solution-cuda
-solution: solution-cuda
+solution: solution-openmp
 
 solution-openmp: $(BUILD)/main.o $(BUILD)/openmp.o
 	@mkdir -p $(BIN)

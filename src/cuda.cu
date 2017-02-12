@@ -14,11 +14,29 @@
 #endif
 
 #ifndef THREADS_PER_BLOCK
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 512
 #endif
 
 using namespace std;
 
+
+__device__ __inline__ double atomic_add_double(double* address, 
+                                               double val) {
+    unsigned long long int* address_as_ull = (unsigned long long int*) address; 
+    unsigned long long int old = *address_as_ull, assumed;
+    
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull,
+                        assumed,
+                        __double_as_longlong(val +
+                                             __longlong_as_double(assumed)));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+    
+    return __longlong_as_double(old);
+}
 
 __global__ void kernel_prepare(vertex_size_t* d_vertices,
                                double*        d_result,
@@ -44,7 +62,7 @@ __global__ void kernel_calculate_threads_optimum(vertex_size_t* d_vertices,
                                                  edge_size_t*   d_edges,
                                                  vertex_size_t* d_ends,
                                                  edge_size_t*   d_indices) {
-    // hidden
+    // nothing...
 }
 
 __global__ void kernel_summarize(vertex_size_t* d_vertices,
@@ -55,7 +73,7 @@ __global__ void kernel_summarize(vertex_size_t* d_vertices,
     double* result_block = d_result_block + vertices * blockIdx.x;
 
     for (vertex_size_t v = threadIdx.x; v < vertices; v += blockDim.x) {
-        atomicAdd(d_result + v, result_block[v]);
+        atomic_add_double(d_result + v, result_block[v]);
     }
 
     __threadfence_block();
@@ -168,6 +186,7 @@ __global__ void kernel_calculate_bc(vertex_size_t* d_vertices,
         __syncthreads();
 
         if (threadIdx.x == 0) {
+            order_pos     = order;
             p_pos         = 0;
             queue_front   = queue;
             queue_back    = queue;
@@ -183,7 +202,6 @@ __global__ void kernel_calculate_bc(vertex_size_t* d_vertices,
 
         while (queue_front != queue_back) {
             if (threadIdx.x == 0) {
-                order_pos             = order;
                 queue_back_cumulative = 0;
 
                 need                  = queue_back - queue_front;
@@ -300,7 +318,7 @@ __global__ void kernel_calculate_bc(vertex_size_t* d_vertices,
 
                 while (j != 0) {
                     vertex_size_t t = p_val[j];
-                    atomicAdd(delta + t, sigma[t] * d);
+                    atomic_add_double(delta + t, sigma[t] * d);
                     j = p_prev[j];
                 }
 
