@@ -65,7 +65,7 @@ void run(vertex_size_t  vertices,
             fill(delta,   delta   + vertices, 0.0);
 
             vertex_size_t* order_pos    = order;
-            vertex_size_t  p_pos        = 0;
+            edge_size_t    p_pos        = 0;
             vertex_size_t* queue_front  = queue;
             vertex_size_t* queue_back   = queue;
 
@@ -87,13 +87,12 @@ void run(vertex_size_t  vertices,
                         visited[t] = true;
                     }
 
-                    if (depth[t] > depth[v] && depth[t] == depth[v] + 1) {
+                    if (depth[t] > depth[v]) {
                         sigma[t] += sigma[v];
-                        
+
                         p_prev[p_pos] = p_last[t];
                         p_val[p_pos] = v;
-                        p_last[t] = p_pos;
-                        p_pos++;
+                        p_last[t] = p_pos++;
                     }
                 }
             }
