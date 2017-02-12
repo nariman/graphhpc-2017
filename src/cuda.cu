@@ -36,6 +36,8 @@ __global__ void kernel_prepare(vertex_size_t* d_vertices,
             d_result[i] = 0;
         }
     }
+
+    __threadfence_block();
 }
 
 __global__ void kernel_calculate_threads_optimum(vertex_size_t* d_vertices,
@@ -55,6 +57,8 @@ __global__ void kernel_summarize(vertex_size_t* d_vertices,
     for (vertex_size_t v = threadIdx.x; v < vertices; v += blockDim.x) {
         atomicAdd(d_result + v, result_block[v]);
     }
+
+    __threadfence_block();
 }
 
 __global__ void kernel_debug_graph_data(vertex_size_t* d_vertices,
@@ -445,15 +449,15 @@ void run(vertex_size_t  h_vertices,
 
     // Cleaning
 
-    cudaFree(d_order);
-    cudaFree(d_p_last);
-    cudaFree(d_p_prev);
-    cudaFree(d_p_val);
-    cudaFree(d_sigma);
-    cudaFree(d_depth);
-    cudaFree(d_visited);
-    cudaFree(d_delta);
     cudaFree(d_queue);
+    cudaFree(d_delta);
+    cudaFree(d_visited);
+    cudaFree(d_depth);
+    cudaFree(d_sigma);
+    cudaFree(d_p_val);
+    cudaFree(d_p_prev);
+    cudaFree(d_p_last);
+    cudaFree(d_order);
 
     cudaFree(d_result_block);
     cudaFree(d_result);
