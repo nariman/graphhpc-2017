@@ -3,7 +3,6 @@
  * Betweenness Centrality Problem
  */
 
-#include <algorithm>
 #include <cstring>  // std::memset
 #include <iostream> // std::cout
 

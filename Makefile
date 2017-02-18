@@ -8,12 +8,17 @@ BIN			:= bin
 BUILD		:= build
 
 INCS		:= -I $(SRC)
+LIBS		:= -L/usr/local/cuda/lib64 -lcudart -lrt
 
 EXT			:= cpp
 EXTCUDA		:= cu
 
-all: solution-openmp solution-cuda
-solution: solution-openmp
+all: solution-openmp solution-cuda solution-mixed
+solution: solution-mixed
+
+solution-mixed: $(BUILD)/main.o $(BUILD)/mixed.o
+	@mkdir -p $(BIN)
+	$(CC) $^ -o $(BIN)/solution-mixed $(CFLAGS) $(LIBS) $(INCS)
 
 solution-openmp: $(BUILD)/main.o $(BUILD)/openmp.o
 	@mkdir -p $(BIN)
@@ -21,22 +26,27 @@ solution-openmp: $(BUILD)/main.o $(BUILD)/openmp.o
 
 solution-cuda: $(BUILD)/main.o $(BUILD)/cuda.o
 	@mkdir -p $(BIN)
-	$(CC) $^ -o $(BIN)/solution-cuda -L/usr/local/cuda/lib64 -lcudart -lrt $(CFLAGS) $(INCS)
+	$(CC) $^ -o $(BIN)/solution-cuda $(CFLAGS) $(LIBS) $(INCS)
 
-$(BUILD)/main.o: $(SRC)/main.cpp
+$(BUILD)/main.o: $(SRC)/main.$(EXT)
 	@mkdir -p $(BUILD)
 	$(CC) -c -o $@ $< $(CFLAGS) $(INCS)
 
-$(BUILD)/openmp.o: $(SRC)/openmp.cpp
+$(BUILD)/mixed.o: $(SRC)/mixed.$(EXTCUDA)
+	@mkdir -p $(BUILD)
+	$(CCCUDA) -c -o $@ $< -std=c++11 --compiler-options "$(CFLAGS)" $(CFLAGSCUDA) $(INCS)
+
+$(BUILD)/openmp.o: $(SRC)/openmp.$(EXT)
 	@mkdir -p $(BUILD)
 	$(CC) -c -o $@ $< $(CFLAGS) $(INCS)
 
-$(BUILD)/cuda.o: $(SRC)/cuda.cu
+$(BUILD)/cuda.o: $(SRC)/cuda.$(EXTCUDA)
 	@mkdir -p $(BUILD)
 	$(CCCUDA) -c -o $@ $< $(CFLAGSCUDA) $(INCS)
 
 clean:
 	@rm -r $(BUILD)/*
+	@rm $(BIN)/solution-mixed
 	@rm $(BIN)/solution-openmp
 	@rm $(BIN)/solution-cuda
 
