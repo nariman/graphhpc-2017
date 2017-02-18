@@ -125,7 +125,7 @@ __global__ void kernel(vertex_size_t* d_vertices,
     // Parallel cycle
 
     for (vertex_size_t s = gpu_start + blockIdx.x; 
-         s < gpu_end; 
+         s < gpu_end;
          s += gridDim.x) {
         __shared__ vertex_size_t* order_pos;
         __shared__ edge_size_t    p_pos;
@@ -244,7 +244,7 @@ __global__ void kernel(vertex_size_t* d_vertices,
                     j = p_prev[j];
                 }
 
-                result_block[v] += delta[v] / 2;
+                result_block[v] += delta[v];
             }
 
             __syncthreads();
@@ -426,7 +426,7 @@ void run(vertex_size_t  vertices,
     // Partitioning
     //
 
-    // Splits for GPU 1/3 and CPU 2/3 of all vertices
+    // Splits for CPU 2/3 and GPU 1/3 of all vertices
 
     #if defined(CPU) && defined(GPU)
     vertex_size_t cpu_start = 0;
@@ -447,7 +447,6 @@ void run(vertex_size_t  vertices,
     //
     // Main logic
     //
-
 
     #ifdef GPU
     timer_start("GPU main logic");
@@ -551,7 +550,7 @@ void run(vertex_size_t  vertices,
                     i = p_prev[i];
                 }
 
-                result_thread[*order_pos] += delta[*order_pos] / 2;
+                result_thread[*order_pos] += delta[*order_pos];
             }
         }
 
@@ -592,6 +591,11 @@ void run(vertex_size_t  vertices,
 
     timer_end("GPU result reduction");
     #endif
+
+    #pragma omp parallel for
+    for (vertex_size_t v = 0; v < vertices; v++) {
+        result[v] /= 2;
+    }
 
 
     //
@@ -669,6 +673,9 @@ void run(vertex_size_t  vertices,
         cout << setprecision(5) << fixed << it.second << " sec.";
         cout << endl;
     }
+
+    timers.clear();
+    timings.clear();
 
     #endif
 }
