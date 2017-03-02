@@ -29,7 +29,7 @@
 #endif
 
 #ifndef THREADS_PER_BLOCK
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 128
 #endif
 
 #define BPI BLOCKS_PER_ITERATION
@@ -96,7 +96,6 @@ __global__ void kernel(vertex_size_t* d_vertices,
                        vertex_size_t* d_p_val,
                        edge_size_t*   d_sigma,
                        vertex_size_t* d_depth,
-                       int*           d_visited,
                        double*        d_delta,
                        vertex_size_t* d_queue,
                        double*        d_result,
@@ -114,11 +113,19 @@ __global__ void kernel(vertex_size_t* d_vertices,
     vertex_size_t* p_val        = d_p_val        + edges    * blockIdx.x + 1;
     edge_size_t*   sigma        = d_sigma        + vertices * blockIdx.x;
     vertex_size_t* depth        = d_depth        + vertices * blockIdx.x;
-    int*           visited      = d_visited      + vertices * blockIdx.x;
     double*        delta        = d_delta        + vertices * blockIdx.x;
     vertex_size_t* queue        = d_queue        + vertices * blockIdx.x;
 
     double*        result_block = d_result_block + vertices * blockIdx.x;
+
+    __shared__ vertex_size_t* order_pos;
+    __shared__ edge_size_t    p_pos;
+    __shared__ vertex_size_t* queue_front;
+    __shared__ vertex_size_t* queue_back;
+    __shared__ vertex_size_t  queue_back_cache;
+    __shared__ vertex_size_t  level; // depth, as a constant
+
+    __shared__ vertex_size_t  need;
 
     __syncthreads();
 
@@ -127,22 +134,11 @@ __global__ void kernel(vertex_size_t* d_vertices,
     for (vertex_size_t s = gpu_start + blockIdx.x; 
          s < gpu_end;
          s += gridDim.x) {
-        __shared__ vertex_size_t* order_pos;
-        __shared__ edge_size_t    p_pos;
-        __shared__ vertex_size_t* queue_front;
-        __shared__ vertex_size_t* queue_back;
-        __shared__ vertex_size_t  queue_back_cumulative;
-        __shared__ vertex_size_t  level; // depth, as a constant
-
-        __shared__ vertex_size_t  need;
-
-        __syncthreads();
 
         for (vertex_size_t i = threadIdx.x; i < vertices; i += blockDim.x) {
             p_last[i]  = 0;
             sigma[i]   = 0;
-            depth[i]   = vertices;
-            visited[i] = 0;
+            depth[i]   = 0;
             delta[i]   = 0;
         }
 
@@ -153,11 +149,10 @@ __global__ void kernel(vertex_size_t* d_vertices,
             p_pos         = 0;
             queue_front   = queue;
             queue_back    = queue;
-            level         = 0;
+            level         = 2;
 
             sigma[s]      = 1;
-            depth[s]      = 0;
-            visited[s]    = 1;
+            depth[s]      = 1;
             *queue_back++ = s;
         }
 
@@ -165,9 +160,9 @@ __global__ void kernel(vertex_size_t* d_vertices,
 
         while (queue_front != queue_back) {
             if (threadIdx.x == 0) {
-                queue_back_cumulative = 0;
+                queue_back_cache = 0;
 
-                need                  = queue_back - queue_front;
+                need             = queue_back - queue_front;
             }
 
             __syncthreads();
@@ -176,19 +171,18 @@ __global__ void kernel(vertex_size_t* d_vertices,
                 vertex_size_t v  = *(queue_front + i);
                 *(order_pos + i) = v;
 
-                for (edge_size_t j = d_indices[v]; j < d_indices[v + 1]; j++) {
-                    vertex_size_t t = d_ends[j];
-
-                    if (0 == atomicCAS(visited + t, 0, 1)) {
-                        atomicExch(depth + t, level + 1);
-                        *(queue_back + atomicAdd(&queue_back_cumulative, 
-                                                 (vertex_size_t) 1)) = t;
+                for (vertex_size_t *t = &d_ends[d_indices[v]], 
+                                   *r = &d_ends[d_indices[v + 1]];
+                     t != r; 
+                     ++t) {
+                    if (0 == atomicCAS(depth + *t, 0, level)) {
+                        *(queue_back + atomicAdd(&queue_back_cache, 1)) = *t;
                     }
 
-                    if (depth[t] > level) {
-                        atomicAdd(sigma + t, sigma[v]);
+                    if (depth[*t] >= level) {
+                        atomicAdd(sigma + *t, sigma[v]);
                         edge_size_t p_pos_cache = atomicAdd(&p_pos, 1);
-                        p_prev[p_pos_cache] = atomicExch(p_last + t, 
+                        p_prev[p_pos_cache] = atomicExch(p_last + *t, 
                                                          p_pos_cache);
                         p_val[p_pos_cache] = v;
                     }
@@ -200,16 +194,13 @@ __global__ void kernel(vertex_size_t* d_vertices,
             if (threadIdx.x == 0) {
                 order_pos    += need;
                 queue_front  += need;
-                queue_back   += queue_back_cumulative;
+                queue_back   += queue_back_cache;
                 level        ++;
                 *order_pos++  = need;
             }
 
-            __threadfence_block();
             __syncthreads();
         }
-
-        __syncthreads();
         
         if (threadIdx.x == 0) {
             // Set to zero the first level of depth (where is only `s` vertex)
@@ -226,17 +217,18 @@ __global__ void kernel(vertex_size_t* d_vertices,
                 need = *order_pos--;
             }
 
-            __threadfence_block();
             __syncthreads();
 
             if (need == 0) {
                 break;
             }
 
-            for (vertex_size_t i = threadIdx.x; i < need; i += blockDim.x) {
-                vertex_size_t v = *(order_pos - i);
-                edge_size_t j = p_last[v];
-                double d = (1 + delta[v]) / (double) sigma[v];
+            for (vertex_size_t *v = order_pos - threadIdx.x, 
+                               *u = order_pos - need; 
+                 v > u; 
+                 v -= blockDim.x) {
+                edge_size_t j = p_last[*v];
+                double d = (1 + delta[*v]) / (double) sigma[*v];
 
                 while (j != 0) {
                     vertex_size_t t = p_val[j];
@@ -244,7 +236,7 @@ __global__ void kernel(vertex_size_t* d_vertices,
                     j = p_prev[j];
                 }
 
-                result_block[v] += delta[v];
+                result_block[*v] += delta[*v];
             }
 
             __syncthreads();
@@ -256,12 +248,8 @@ __global__ void kernel(vertex_size_t* d_vertices,
             __syncthreads();
         }
 
-        __threadfence_block();
         __syncthreads();
     }
-
-    __threadfence_block();
-    __syncthreads();
 
     // Result reduction
 
@@ -336,7 +324,6 @@ void run(vertex_size_t  vertices,
     vertex_size_t* d_p_val;
     edge_size_t*   d_sigma;
     vertex_size_t* d_depth;
-    int*           d_visited;
     double*        d_delta;
     vertex_size_t* d_queue;
 
@@ -401,7 +388,6 @@ void run(vertex_size_t  vertices,
             cudaMalloc((void **) &d_p_val,   sizeof(vertex_size_t) * (edges   * BPI + 1));
             cudaMalloc((void **) &d_sigma,   sizeof(edge_size_t)   * vertices * BPI);
             cudaMalloc((void **) &d_depth,   sizeof(vertex_size_t) * vertices * BPI);
-            cudaMalloc((void **) &d_visited, sizeof(int)           * vertices * BPI);
             cudaMalloc((void **) &d_delta,   sizeof(double)        * vertices * BPI);
             cudaMalloc((void **) &d_queue,   sizeof(vertex_size_t) * vertices * BPI);
 
@@ -434,7 +420,7 @@ void run(vertex_size_t  vertices,
     vertex_size_t gpu_start = vertices / 3 * 2;
     vertex_size_t gpu_end   = vertices;
     #elif defined(CPU)
-    vertex_size_t cpu_start = 0
+    vertex_size_t cpu_start = 0;
     vertex_size_t cpu_end   = vertices;
     #elif defined(GPU)
     vertex_size_t gpu_start = 0;
@@ -460,7 +446,6 @@ void run(vertex_size_t  vertices,
                                                         d_p_val,
                                                         d_sigma,
                                                         d_depth,
-                                                        d_visited,
                                                         d_delta,
                                                         d_queue,
                                                         d_result,
@@ -556,7 +541,7 @@ void run(vertex_size_t  vertices,
 
         // Result reduction
 
-        for (vertex_size_t v = 0; v < vertices; v++) {
+        for (vertex_size_t v = 0; v < vertices; ++v) {
             #pragma omp atomic
             result[v] += result_thread[v];
         }
@@ -640,7 +625,6 @@ void run(vertex_size_t  vertices,
 
             cudaFree(d_queue);
             cudaFree(d_delta);
-            cudaFree(d_visited);
             cudaFree(d_depth);
             cudaFree(d_sigma);
             cudaFree(d_p_val);
