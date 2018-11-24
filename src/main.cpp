@@ -8,6 +8,7 @@
 #include <cstring>   // std::memset, std::strcmp
 #include <iomanip>   // std::setprecision
 #include <iostream>  // std::cout, std::fixed
+#include <cmath>     // std::log
 
 #include "main.h"
 
@@ -108,7 +109,7 @@ int main(int argc, char** argv) {
     //
     // Configuration
     //
-    
+
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-in")) {
             input_filename = argv[++i];
@@ -149,14 +150,14 @@ int main(int argc, char** argv) {
         assert(fread(&edges, sizeof(edge_size_t), 1, f) == 1);
 
         scale = log(vertices) / log(2);
-        
+
         unsigned char align;
         assert(fread(&align, sizeof(unsigned char), 1, f) == 1);
-        
+
         indices = new edge_size_t[vertices + 1];
         ends = new vertex_size_t[edges];
 
-        assert(fread(indices, sizeof(edge_size_t), vertices + 1, f) == 
+        assert(fread(indices, sizeof(edge_size_t), vertices + 1, f) ==
                vertices + 1);
         assert(fread(ends, sizeof(vertex_size_t), edges, f) == edges);
 
@@ -240,9 +241,9 @@ int main(int argc, char** argv) {
                 max_time = iteration_times[i];
             }
         }
-        
+
         avg_time = all_time / number_of_iterations;
-        
+
         cout << "Iteration times:" << endl;
 
         cout << " - Min: " << min_time << " sec." << endl;
@@ -264,7 +265,7 @@ int main(int argc, char** argv) {
     delete[] ends;
     delete[] indices;
 
-    // 
+    //
     // Done
     //
 
